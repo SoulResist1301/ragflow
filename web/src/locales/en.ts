@@ -296,6 +296,7 @@ Example: A 1 KB message with 1024-dim embedding uses ~9 KB. The 5 MB default lim
       emptyFiles: 'Create empty file',
       indexLocalFolder: 'Index local folder',
       localFolderPath: 'Local folder path',
+      localFolderPathRequired: 'Local folder path is required.',
       localFolderPathDescription:
         'Enter the path to the folder mounted in the Docker container (must be within /ragflow/mounted_data)',
       recursiveScan: 'Scan subdirectories',

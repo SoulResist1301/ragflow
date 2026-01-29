@@ -5,16 +5,19 @@ slug: /index_local_folder
 
 # Index local folders
 
-RAGFlow supports indexing documents from local folders that are already mounted in the Docker container. This feature allows you to avoid duplicating files on your system by directly indexing existing files without uploading them through the web interface.
+RAGFlow supports indexing documents from local folders that are already mounted in the Docker container. This feature allows you to index existing files through the RAGFlow interface without manually uploading them, while still benefiting from RAGFlow's document processing and storage capabilities.
 
 ## Overview
 
 When you have documents stored on your host machine that are already accessible to the RAGFlow Docker container through volume mounts, you can use the local folder indexing feature to:
 
-- Index files without duplicating them in storage
-- Preserve your existing file organization
+- Index files through RAGFlow's interface without manual uploads
+- Preserve your existing file organization structure
 - Efficiently manage large document collections
 - Use read-only mounts for added safety
+- Automatically process and store files in RAGFlow's storage system
+
+**Note**: Files are read from the mounted folder and stored in RAGFlow's storage system for processing. This provides the benefit of simplified indexing while maintaining RAGFlow's document management capabilities.
 
 ## Prerequisites
 
@@ -182,7 +185,7 @@ volumes:
 
 **Q: Will the files be duplicated in RAGFlow's storage?**
 
-A: Yes, the files are copied to RAGFlow's storage system to ensure they are available for parsing and retrieval even if the mounted folder is unmounted or removed. However, you avoid the manual upload step and can organize files on your filesystem first.
+A: Yes, the files are read from the mounted folder and stored in RAGFlow's storage system. This ensures they are available for parsing and retrieval. The benefit is that you can organize and prepare your files on your filesystem first, then index them without manually uploading each file through the web interface. The read-only mount option also provides an additional safety layer to prevent accidental modifications to your original files.
 
 **Q: Can I index the same folder multiple times?**
 

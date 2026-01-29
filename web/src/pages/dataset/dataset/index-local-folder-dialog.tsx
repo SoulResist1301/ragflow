@@ -25,7 +25,7 @@ import { IIndexLocalFolderFormData } from './use-index-local-folder';
 
 const formSchema = z.object({
   localPath: z.string().min(1, {
-    message: 'Local folder path is required.',
+    message: 'knowledgeDetails.localFolderPathRequired',
   }),
   recursive: z.boolean().default(true),
   parseOnCreation: z.boolean().default(true),

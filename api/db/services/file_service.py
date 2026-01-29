@@ -500,7 +500,7 @@ class FileService(CommonService):
     def index_local_folder(cls, kb, local_path, user_id, recursive=True):
         """
         Index documents from a local folder that is mounted in the Docker container.
-        This creates document records and indexes files without duplicating storage.
+        Files are read from the mounted path and stored in RAGFlow's storage system.
         
         Args:
             kb: Knowledge base object
@@ -520,10 +520,19 @@ class FileService(CommonService):
         
         # Get allowed base path from environment or use a default
         allowed_base_path = os.getenv("MOUNTED_FOLDERS_PATH", "/ragflow/mounted_data")
-        allowed_base_path = os.path.abspath(allowed_base_path)
+        allowed_base_path = os.path.abspath(os.path.realpath(allowed_base_path))
+        local_path_real = os.path.realpath(local_path)
         
         # Security check: ensure the local_path is within the allowed base path
-        if not local_path.startswith(allowed_base_path):
+        # Use os.path.commonpath to prevent path traversal attacks
+        try:
+            common = os.path.commonpath([allowed_base_path, local_path_real])
+            if common != allowed_base_path:
+                raise ValueError(
+                    f"Access denied. Path must be within {allowed_base_path}. "
+                    f"Please configure MOUNTED_FOLDERS_PATH environment variable."
+                )
+        except ValueError:
             raise ValueError(
                 f"Access denied. Path must be within {allowed_base_path}. "
                 f"Please configure MOUNTED_FOLDERS_PATH environment variable."
@@ -571,6 +580,13 @@ class FileService(CommonService):
                 
                 if filetype == FileType.OTHER.value:
                     err.append(f"{file_path}: File type not supported")
+                    continue
+                
+                # Check file size to avoid memory issues
+                file_size = os.path.getsize(file_path)
+                max_size = 1024 * 1024 * 1024  # 1GB limit
+                if file_size > max_size:
+                    err.append(f"{file_path}: File too large (max {max_size // (1024*1024)}MB)")
                     continue
                 
                 # Read file from local path
