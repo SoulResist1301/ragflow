@@ -32,6 +32,7 @@ const {
   document_rename,
   document_run,
   document_upload,
+  document_index_local_folder,
   web_crawl,
   knowledge_graph,
   document_infos,
@@ -107,6 +108,10 @@ const methods = {
   },
   document_upload: {
     url: document_upload,
+    method: 'post',
+  },
+  document_index_local_folder: {
+    url: document_index_local_folder,
     method: 'post',
   },
   web_crawl: {

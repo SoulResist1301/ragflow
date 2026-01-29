@@ -30,6 +30,8 @@ import { useBulkOperateDataset } from './use-bulk-operate-dataset';
 import { useCreateEmptyDocument } from './use-create-empty-document';
 import { useSelectDatasetFilters } from './use-select-filters';
 import { useHandleUploadDocument } from './use-upload-document';
+import { useHandleIndexLocalFolder } from './use-index-local-folder';
+import { IndexLocalFolderDialog } from './index-local-folder-dialog';
 
 export default function Dataset() {
   const { t } = useTranslation();
@@ -40,6 +42,15 @@ export default function Dataset() {
     onDocumentUploadOk,
     documentUploadLoading,
   } = useHandleUploadDocument();
+  
+  const {
+    indexLocalFolderVisible,
+    hideIndexLocalFolderModal,
+    showIndexLocalFolderModal,
+    onIndexLocalFolderOk,
+    indexLocalFolderLoading,
+  } = useHandleIndexLocalFolder();
+  
   const { knowledgeBase } = useKnowledgeBaseContext();
   const {
     searchString,
@@ -201,6 +212,9 @@ export default function Dataset() {
               <DropdownMenuItem onClick={showDocumentUploadModal}>
                 {t('fileManager.uploadFile')}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={showIndexLocalFolderModal}>
+                {t('knowledgeDetails.indexLocalFolder')}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={showCreateModal}>
                 {t('knowledgeDetails.emptyFiles')}
@@ -238,6 +252,14 @@ export default function Dataset() {
             loading={createLoading}
             title={'File Name'}
           ></RenameDialog>
+        )}
+        {indexLocalFolderVisible && (
+          <IndexLocalFolderDialog
+            visible={indexLocalFolderVisible}
+            hideModal={hideIndexLocalFolderModal}
+            onOk={onIndexLocalFolderOk}
+            loading={indexLocalFolderLoading}
+          />
         )}
         {manageMetadataVisible && (
           <ManageMetadataModal

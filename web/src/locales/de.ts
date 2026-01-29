@@ -302,6 +302,16 @@ Beispiel: Eine 1 KB Nachricht mit 1024-dim Einbettung verwendet ~9 KB. Das Stand
       searchFiles: 'Durchsuchen Sie Ihre Dateien',
       localFiles: 'Lokale Dateien',
       emptyFiles: 'Leere Datei erstellen',
+      indexLocalFolder: 'Lokalen Ordner indizieren',
+      localFolderPath: 'Lokaler Ordnerpfad',
+      localFolderPathDescription:
+        'Geben Sie den Pfad zum im Docker-Container gemounteten Ordner ein (muss innerhalb von /ragflow/mounted_data sein)',
+      recursiveScan: 'Unterverzeichnisse scannen',
+      recursiveScanDescription:
+        'Rekursiv alle Unterverzeichnisse nach Dateien durchsuchen',
+      parseAfterIndexing: 'Nach Indizierung analysieren',
+      parseAfterIndexingDescription:
+        'Dokumente nach dem Indizieren automatisch analysieren',
       webCrawl: 'Web-Crawling',
       chunkNumber: 'Chunk-Anzahl',
       uploadDate: 'Hochladedatum',

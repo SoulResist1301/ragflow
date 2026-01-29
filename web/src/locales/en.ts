@@ -294,6 +294,16 @@ Example: A 1 KB message with 1024-dim embedding uses ~9 KB. The 5 MB default lim
       searchFiles: 'Search your files',
       localFiles: 'Local files',
       emptyFiles: 'Create empty file',
+      indexLocalFolder: 'Index local folder',
+      localFolderPath: 'Local folder path',
+      localFolderPathDescription:
+        'Enter the path to the folder mounted in the Docker container (must be within /ragflow/mounted_data)',
+      recursiveScan: 'Scan subdirectories',
+      recursiveScanDescription:
+        'Recursively scan all subdirectories for files',
+      parseAfterIndexing: 'Parse after indexing',
+      parseAfterIndexingDescription:
+        'Automatically start parsing documents after indexing',
       webCrawl: 'Web crawl',
       chunkNumber: 'Chunks',
       uploadDate: 'Upload date',
