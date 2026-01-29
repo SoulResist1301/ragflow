@@ -98,6 +98,58 @@ async def upload():
     return get_json_result(data=files)
 
 
+@manager.route("/index_local_folder", methods=["POST"])  # noqa: F821
+@login_required
+@validate_request("kb_id", "local_path")
+async def index_local_folder():
+    """
+    Index documents from a local folder that is already mounted in the Docker container.
+    This allows using existing files without duplicating them in storage.
+    """
+    req = await get_request_json()
+    kb_id = req.get("kb_id")
+    local_path = req.get("local_path")
+    recursive = req.get("recursive", True)
+    
+    if not kb_id:
+        return get_json_result(data=False, message='Lack of "KB ID"', code=RetCode.ARGUMENT_ERROR)
+    
+    if not local_path:
+        return get_json_result(data=False, message='Lack of "local_path"', code=RetCode.ARGUMENT_ERROR)
+    
+    e, kb = KnowledgebaseService.get_by_id(kb_id)
+    if not e:
+        raise LookupError("Can't find this dataset!")
+    
+    if not check_kb_team_permission(kb, current_user.id):
+        return get_json_result(data=False, message="No authorization.", code=RetCode.AUTHENTICATION_ERROR)
+    
+    try:
+        err, indexed_files = await thread_pool_exec(
+            FileService.index_local_folder,
+            kb,
+            local_path,
+            current_user.id,
+            recursive
+        )
+        
+        if err:
+            return get_json_result(
+                data=indexed_files,
+                message="\n".join(err),
+                code=RetCode.SERVER_ERROR if indexed_files else RetCode.DATA_ERROR
+            )
+        
+        return get_json_result(
+            data={
+                "indexed_count": len(indexed_files),
+                "files": [f[0] for f in indexed_files]
+            }
+        )
+    except Exception as e:
+        return server_error_response(e)
+
+
 @manager.route("/web_crawl", methods=["POST"])  # noqa: F821
 @login_required
 @validate_request("kb_id", "name", "url")

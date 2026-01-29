@@ -497,6 +497,139 @@ class FileService(CommonService):
 
     @classmethod
     @DB.connection_context()
+    def index_local_folder(cls, kb, local_path, user_id, recursive=True):
+        """
+        Index documents from a local folder that is mounted in the Docker container.
+        This creates document records and indexes files without duplicating storage.
+        
+        Args:
+            kb: Knowledge base object
+            local_path: Path to the local folder (must be within allowed mounted paths)
+            user_id: User ID performing the operation
+            recursive: Whether to recursively scan subdirectories
+            
+        Returns:
+            tuple: (errors, indexed_files) where errors is a list of error messages
+                   and indexed_files is a list of (document_dict, blob) tuples
+        """
+        import os
+        from common.file_utils import traversal_files
+        
+        # Validate path to prevent directory traversal attacks
+        local_path = os.path.abspath(local_path)
+        
+        # Get allowed base path from environment or use a default
+        allowed_base_path = os.getenv("MOUNTED_FOLDERS_PATH", "/ragflow/mounted_data")
+        allowed_base_path = os.path.abspath(allowed_base_path)
+        
+        # Security check: ensure the local_path is within the allowed base path
+        if not local_path.startswith(allowed_base_path):
+            raise ValueError(
+                f"Access denied. Path must be within {allowed_base_path}. "
+                f"Please configure MOUNTED_FOLDERS_PATH environment variable."
+            )
+        
+        # Check if path exists
+        if not os.path.exists(local_path):
+            raise FileNotFoundError(f"Path does not exist: {local_path}")
+        
+        if not os.path.isdir(local_path):
+            raise ValueError(f"Path is not a directory: {local_path}")
+        
+        # Setup folders
+        root_folder = cls.get_root_folder(user_id)
+        pf_id = root_folder["id"]
+        cls.init_knowledgebase_docs(pf_id, user_id)
+        kb_root_folder = cls.get_kb_folder(user_id)
+        kb_folder = cls.new_a_file_from_kb(kb.tenant_id, kb.name, kb_root_folder["id"])
+        
+        err, files = [], []
+        
+        # Scan directory for files
+        if recursive:
+            file_paths = list(traversal_files(local_path))
+        else:
+            file_paths = [
+                os.path.join(local_path, f)
+                for f in os.listdir(local_path)
+                if os.path.isfile(os.path.join(local_path, f))
+            ]
+        
+        # Process each file
+        for file_path in file_paths:
+            try:
+                filename = os.path.basename(file_path)
+                
+                # Get relative path for organization
+                rel_path = os.path.relpath(file_path, local_path)
+                parent_dirs = os.path.dirname(rel_path)
+                
+                # Check file type
+                DocumentService.check_doc_health(kb.tenant_id, filename)
+                filename = duplicate_name(DocumentService.query, name=filename, kb_id=kb.id)
+                filetype = filename_type(filename)
+                
+                if filetype == FileType.OTHER.value:
+                    err.append(f"{file_path}: File type not supported")
+                    continue
+                
+                # Read file from local path
+                with open(file_path, "rb") as f:
+                    blob = f.read()
+                
+                if filetype == FileType.PDF.value:
+                    blob = read_potential_broken_pdf(blob)
+                
+                # Create storage location (store in RAGFlow storage but mark source)
+                # Use parent_dirs if file is in subdirectory
+                location = filename if not parent_dirs else f"{parent_dirs}/{filename}"
+                
+                # Ensure unique location in storage
+                while settings.STORAGE_IMPL.obj_exist(kb.id, location):
+                    location += "_"
+                
+                # Store the blob in RAGFlow storage
+                settings.STORAGE_IMPL.put(kb.id, location, blob)
+                
+                # Generate document ID
+                doc_id = get_uuid()
+                
+                # Create thumbnail if applicable
+                img = thumbnail_img(filename, blob)
+                thumbnail_location = ""
+                if img is not None:
+                    thumbnail_location = f"thumbnail_{doc_id}.png"
+                    settings.STORAGE_IMPL.put(kb.id, thumbnail_location, img)
+                
+                # Create document record
+                # source_type is set to "local_folder" to indicate origin
+                doc = {
+                    "id": doc_id,
+                    "kb_id": kb.id,
+                    "parser_id": cls.get_parser(filetype, filename, kb.parser_id),
+                    "pipeline_id": kb.pipeline_id,
+                    "parser_config": kb.parser_config,
+                    "created_by": user_id,
+                    "type": filetype,
+                    "name": filename,
+                    "source_type": "local_folder",
+                    "suffix": Path(filename).suffix.lstrip("."),
+                    "location": location,
+                    "size": len(blob),
+                    "thumbnail": thumbnail_location,
+                }
+                DocumentService.insert(doc)
+                
+                cls.add_file_from_kb(doc, kb_folder["id"], kb.tenant_id)
+                files.append((doc, blob))
+                
+            except Exception as e:
+                err.append(f"{file_path}: {str(e)}")
+        
+        return err, files
+
+    @classmethod
+    @DB.connection_context()
     def list_all_files_by_parent_id(cls, parent_id):
         try:
             files = cls.model.select().where((cls.model.parent_id == parent_id) & (cls.model.id != parent_id))
