@@ -411,6 +411,31 @@ See [here](./guides/models/deploy_local_llm.mdx) for more information.
 
 ---
 
+### How to index local folders already mounted in Docker?
+
+RAGFlow supports indexing documents from local folders that are already mounted in the Docker container. This avoids duplicating files by directly indexing existing files without uploading them.
+
+**To mount and index local folders:**
+
+1. Add a volume mount in `docker/docker-compose.yml`:
+   ```yaml
+   volumes:
+     - /path/to/your/documents:/ragflow/mounted_data:ro
+   ```
+
+2. Restart RAGFlow:
+   ```bash
+   docker compose down && docker compose up -d
+   ```
+
+3. In the web interface, navigate to your dataset and click **Add file** > **Index local folder**.
+
+4. Enter the path inside the container (e.g., `/ragflow/mounted_data/my-documents`) and click **OK**.
+
+For detailed instructions, see [Index local folders](./guides/index_local_folder.md).
+
+---
+
 ### How to change the file size limit?
 
 For a locally deployed RAGFlow: the total file size limit per upload is 1GB, with a batch upload limit of 32 files. There is no cap on the total number of files per account. To update this 1GB file size limit:
