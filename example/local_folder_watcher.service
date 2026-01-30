@@ -1,0 +1,29 @@
+[Unit]
+Description=RAGFlow Local Folder Watcher
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=ragflow
+WorkingDirectory=/opt/ragflow
+ExecStart=/usr/bin/python3 /opt/ragflow/example/local_folder_watcher.py \
+    --folder /path/to/your/documents \
+    --ragflow-url http://localhost:9380 \
+    --api-key YOUR_API_KEY \
+    --connector-id YOUR_CONNECTOR_ID \
+    --patterns "*.pdf" "*.docx" "*.txt" \
+    --debounce 2 \
+    --initial-sync
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ragflow-watcher
+
+[Install]
+WantedBy=multi-user.target

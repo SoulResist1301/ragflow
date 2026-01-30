@@ -5,97 +5,135 @@ slug: /index_local_folder
 
 # Index local folders
 
-RAGFlow supports indexing documents from local folders that are already mounted in the Docker container. This feature allows you to index existing files through the RAGFlow interface without manually uploading them, while still benefiting from RAGFlow's document processing and storage capabilities.
+RAGFlow supports indexing documents from local folders through two approaches:
 
-## Overview
+1. **API-Based Connector** (Recommended) - Uses RAGFlow's connector framework
+2. **Direct File Access** - For simple use cases
 
-When you have documents stored on your host machine that are already accessible to the RAGFlow Docker container through volume mounts, you can use the local folder indexing feature to:
+This guide covers the **API-based connector approach**, which provides better integration, change detection, and metadata control.
 
-- Index files directly from mounted folders without copying them
-- Save disk space by avoiding file duplication  
-- Efficiently manage large document collections
-- Use read-only mounts for added safety
-- Store only the parsed content (chunks/embeddings) in RAGFlow
+## Overview - API-Based Connector
 
-### How Zero-Copy Indexing Works
+The API-based approach treats local folders like external sources (Paperless-ngx, Confluence, etc.):
 
-**Important**: This feature uses a zero-copy architecture - files remain in their original location:
+- **Proper Separation**: RAGFlow treats it as an external API source
+- **Hash-Based Deduplication**: SHA-256 checksums prevent re-indexing unchanged files
+- **Metadata Control**: Normalized metadata with checksums, MIME types, timestamps
+- **Change Detection**: Only sync modified files based on content hashes
+- **Scalable**: Works with RAGFlow's standard connector framework
 
-1. **Read**: Files are read from your mounted folder (which can be read-only)
-2. **Parse**: Files are parsed directly from the mounted location
-3. **Index**: Only the parsed chunks and embeddings are stored in RAGFlow's database
-
-**Files never leave the mounted folder.** RAGFlow only stores references to the file locations and the parsed index data. This means:
-
-- ✅ No file duplication - massive disk space savings
-- ✅ Faster indexing - no file copying step
-- ✅ True read-only support - mounted folders are never written to
-- ⚠️ **Files must remain in the mounted location** - moving or unmounting breaks document access
-- ⚠️ **Folder must stay mounted** - RAGFlow reads files on-demand during parsing and retrieval
+### How It Works
 
 ```
 ┌─────────────────────┐
-│  Host Machine       │
-│  /your/documents/   │  ← Files stay here permanently
+│  Your Documents     │
+│  /your/docs/        │  ← Files stay here
 └──────────┬──────────┘
-           │ Docker volume mount (:ro)
+           │
+           │ File Watcher Service (optional)
+           │ - Detects changes (inotify/watchdog)
+           │ - Computes SHA-256 hashes
+           │ - Normalizes metadata
            ↓
 ┌─────────────────────┐
-│  RAGFlow Container  │
-│  /ragflow/mounted   │  ← Reference files here
+│  RAGFlow API        │
+│  POST /v1/document  │  ← Receives files + metadata
 └──────────┬──────────┘
-           │ Parse & extract
+           │
+           │ Parse & Index
            ↓
 ┌─────────────────────┐
 │  RAGFlow Database   │
-│  (Elasticsearch)    │  ← Only chunks/embeddings stored here
+│  (chunks/vectors)   │  ← Only index data stored
 └─────────────────────┘
 ```
 
+**Key difference from direct access:** Files are uploaded through the API (like regular uploads), but the process can be automated with a file watcher service.
+
 ## Prerequisites
 
-Before indexing local folders, ensure that:
+1. Your RAGFlow instance is running
+2. You have an API key ([How to get API key](../develop/acquire_ragflow_api_key.md))
+3. You have mounted your local folder (if using Docker)
 
-1. Your RAGFlow instance is running via Docker
-2. You have mounted your local folder into the Docker container
-3. The mounted folder is within the allowed base path (default: `/ragflow/mounted_data`)
+## Setup Methods
 
-## Mount local folders
+### Method 1: Manual Connector Setup (Web UI)
 
-To make your local folders accessible to RAGFlow, you need to mount them as volumes in your Docker container.
+1. **Navigate to Data Sources**
+   - Go to RAGFlow web interface
+   - Click "Data Sources" or "Connectors"
+
+2. **Add Local Folder Connector**
+   - Click "Add Connector"
+   - Select "Local Folder" as type
+   - Configure:
+     - **Folder Path**: `/ragflow/mounted_data/documents`
+     - **Recursive**: Enable for subdirectories
+     - **File Patterns**: `*.pdf`, `*.docx`, `*.txt` (optional)
+     - **Compute Hash**: Enable for change detection
+
+3. **Sync Documents**
+   - Click "Sync Now" to index all files
+   - Connector will track file hashes
+   - Only changed files will be re-indexed on future syncs
+
+### Method 2: Automated File Watcher Service (Recommended)
+
+For real-time syncing, use the included file watcher service:
+
+```bash
+# Install dependencies
+pip install watchdog requests
+
+# Run file watcher
+python example/local_folder_watcher.py \
+    --folder /path/to/your/documents \
+    --ragflow-url http://localhost:9380 \
+    --api-key your-api-key \
+    --connector-id your-connector-id \
+    --patterns "*.pdf" "*.docx" \
+    --initial-sync
+```
+
+**Features:**
+- Watches folder for changes in real-time (inotify/watchdog)
+- Computes SHA-256 hashes to detect actual changes
+- Debounces rapid changes to avoid re-syncing during edits
+- Normalizes metadata (checksums, MIME types, timestamps)
+- Only syncs files that have actually changed
+
+**Install as systemd service:**
+```bash
+sudo cp example/local_folder_watcher.service /etc/systemd/system/
+sudo systemctl enable local_folder_watcher
+sudo systemctl start local_folder_watcher
+```
+
+See [File Watcher Documentation](../example/README_local_folder_watcher.md) for details.
+
+## Mount local folders (Docker)
+
+To make your local folders accessible to RAGFlow:
 
 ### Step 1: Edit docker-compose.yml
 
-Open `docker/docker-compose.yml` and add a volume mount under the `ragflow-cpu` or `ragflow-gpu` service:
-
 ```yaml
-volumes:
-  - ./ragflow-logs:/ragflow/logs
-  - ./nginx/ragflow.conf:/etc/nginx/conf.d/ragflow.conf
-  # ... other volumes ...
-  # Mount your local documents folder (read-only recommended)
-  - /path/to/your/documents:/ragflow/mounted_data:ro
+services:
+  ragflow-cpu:
+    volumes:
+      - ./ragflow-logs:/ragflow/logs
+      # ... other volumes ...
+      # Mount your local documents folder
+      - /path/to/your/documents:/ragflow/mounted_data:ro
 ```
 
-**Important notes:**
-- Replace `/path/to/your/documents` with the actual path to your local folder
-- The `:ro` suffix mounts the folder as read-only, preventing accidental modifications to your original files
-- **Files remain in this location** - RAGFlow references them directly without copying
-- **Do not unmount or move files** after indexing - RAGFlow needs access to parse and retrieve them
-- The container path must be under `/ragflow/mounted_data` (or your configured `MOUNTED_FOLDERS_PATH`)
+**Notes:**
+- Replace `/path/to/your/documents` with your actual path
+- The `:ro` suffix makes it read-only (recommended)
+- Container path should be under `/ragflow/mounted_data`
 
-### Step 2: Configure allowed base path (optional)
-
-If you want to use a different base path, edit `docker/.env`:
-
-```bash
-# Base path for mounted folders that can be indexed in RAGFlow
-MOUNTED_FOLDERS_PATH=/ragflow/mounted_data
-```
-
-### Step 3: Restart RAGFlow
-
-After updating the docker-compose file, restart RAGFlow:
+### Step 2: Restart RAGFlow
 
 ```bash
 cd docker
