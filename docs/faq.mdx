@@ -413,7 +413,7 @@ See [here](./guides/models/deploy_local_llm.mdx) for more information.
 
 ### How to index local folders already mounted in Docker?
 
-RAGFlow supports indexing documents from local folders that are already mounted in the Docker container. Files are **read from** the mounted folder (which can be read-only) and **copied to** RAGFlow's internal storage (MinIO/S3) for processing.
+RAGFlow supports zero-copy indexing from local folders mounted in the Docker container. Files **remain in the mounted folder** and are referenced directly - only the parsed index is stored in RAGFlow's database.
 
 **To mount and index local folders:**
 
@@ -422,7 +422,7 @@ RAGFlow supports indexing documents from local folders that are already mounted 
    volumes:
      - /path/to/your/documents:/ragflow/mounted_data:ro
    ```
-   The `:ro` (read-only) flag is safe because files are only read from this location, not written to it.
+   The `:ro` (read-only) flag is recommended for safety. **Keep this mount active** - RAGFlow needs ongoing access to the files.
 
 2. Restart RAGFlow:
    ```bash
@@ -433,7 +433,7 @@ RAGFlow supports indexing documents from local folders that are already mounted 
 
 4. Enter the path inside the container (e.g., `/ragflow/mounted_data/my-documents`) and click **OK**.
 
-Files will be copied from the mounted folder into RAGFlow's storage system. Your original files remain untouched.
+Files will be indexed in place without copying. The mounted folder must remain accessible for RAGFlow to parse and retrieve documents.
 
 For detailed instructions, see [Index local folders](./guides/index_local_folder.md).
 

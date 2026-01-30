@@ -44,7 +44,15 @@ def main():
                     key = "{}/{}".format(kb_id, loc)
                     if REDIS_CONN.exist(key):
                         continue
-                    file_bin = settings.STORAGE_IMPL.get(kb_id, loc)
+                    
+                    # Handle local file references (file://)
+                    if isinstance(loc, str) and loc.startswith("file://"):
+                        local_path = loc[7:]  # Remove 'file://' prefix
+                        with open(local_path, "rb") as f:
+                            file_bin = f.read()
+                    else:
+                        file_bin = settings.STORAGE_IMPL.get(kb_id, loc)
+                    
                     REDIS_CONN.transaction(key, file_bin, 12 * 60)
                     logging.info("CACHE: {}".format(loc))
                 except Exception as e:

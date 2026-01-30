@@ -236,7 +236,27 @@ async def collect():
 
 
 async def get_storage_binary(bucket, name):
-    return await thread_pool_exec(settings.STORAGE_IMPL.get, bucket, name)
+    """
+    Get file binary from storage or local file system.
+    Supports both regular storage (MinIO/S3) and local file references (file://).
+    """
+    # Check if this is a local file reference
+    if isinstance(name, str) and name.startswith("file://"):
+        # Remove file:// prefix and read from local file system
+        local_path = name[7:]  # Remove 'file://' prefix
+        return await thread_pool_exec(_read_local_file, local_path)
+    else:
+        # Regular storage retrieval
+        return await thread_pool_exec(settings.STORAGE_IMPL.get, bucket, name)
+
+
+def _read_local_file(path):
+    """Read file from local file system (for mounted folders)."""
+    import os
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Local file not found: {path}")
+    with open(path, "rb") as f:
+        return f.read()
 
 
 @timeout(60 * 80, 1)

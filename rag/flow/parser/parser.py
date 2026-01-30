@@ -841,7 +841,13 @@ class Parser(ProcessBase):
         name = from_upstream.name
         if self._canvas._doc_id:
             b, n = File2DocumentService.get_storage_address(doc_id=self._canvas._doc_id)
-            blob = settings.STORAGE_IMPL.get(b, n)
+            # Handle local file references (file://)
+            if isinstance(n, str) and n.startswith("file://"):
+                local_path = n[7:]  # Remove 'file://' prefix
+                with open(local_path, "rb") as f:
+                    blob = f.read()
+            else:
+                blob = settings.STORAGE_IMPL.get(b, n)
         else:
             blob = FileService.get_blob(from_upstream.file["created_by"], from_upstream.file["id"])
 

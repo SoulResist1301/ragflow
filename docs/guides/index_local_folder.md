@@ -11,43 +11,44 @@ RAGFlow supports indexing documents from local folders that are already mounted 
 
 When you have documents stored on your host machine that are already accessible to the RAGFlow Docker container through volume mounts, you can use the local folder indexing feature to:
 
-- Index files through RAGFlow's interface without manual uploads
-- Preserve your existing file organization structure
+- Index files directly from mounted folders without copying them
+- Save disk space by avoiding file duplication  
 - Efficiently manage large document collections
 - Use read-only mounts for added safety
-- Automatically process and store files in RAGFlow's storage system
+- Store only the parsed content (chunks/embeddings) in RAGFlow
 
-### How File Storage Works
+### How Zero-Copy Indexing Works
 
-**Important**: This feature uses a read-copy-process workflow:
+**Important**: This feature uses a zero-copy architecture - files remain in their original location:
 
 1. **Read**: Files are read from your mounted folder (which can be read-only)
-2. **Copy**: Files are copied into RAGFlow's internal storage system (MinIO, S3, or configured storage backend)
-3. **Process**: Files are then parsed and indexed from RAGFlow's storage
+2. **Parse**: Files are parsed directly from the mounted location
+3. **Index**: Only the parsed chunks and embeddings are stored in RAGFlow's database
 
-**The read-only mount is only used as a source.** Your original files remain completely untouched on the mounted volume. This means:
+**Files never leave the mounted folder.** RAGFlow only stores references to the file locations and the parsed index data. This means:
 
-- ✅ You can safely use read-only (`:ro`) mounts
-- ✅ Original files are never modified
-- ✅ You can unmount the folder after indexing if desired
-- ⚠️ Files are duplicated into RAGFlow's storage (ensure adequate storage space)
+- ✅ No file duplication - massive disk space savings
+- ✅ Faster indexing - no file copying step
+- ✅ True read-only support - mounted folders are never written to
+- ⚠️ **Files must remain in the mounted location** - moving or unmounting breaks document access
+- ⚠️ **Folder must stay mounted** - RAGFlow reads files on-demand during parsing and retrieval
 
 ```
 ┌─────────────────────┐
 │  Host Machine       │
-│  /your/documents/   │  ← Original files (read-only is safe)
+│  /your/documents/   │  ← Files stay here permanently
 └──────────┬──────────┘
            │ Docker volume mount (:ro)
            ↓
 ┌─────────────────────┐
 │  RAGFlow Container  │
-│  /ragflow/mounted   │  ← Read files from here
+│  /ragflow/mounted   │  ← Reference files here
 └──────────┬──────────┘
-           │ Copy files
+           │ Parse & extract
            ↓
 ┌─────────────────────┐
-│  RAGFlow Storage    │
-│  (MinIO/S3/etc.)    │  ← Files stored here for processing
+│  RAGFlow Database   │
+│  (Elasticsearch)    │  ← Only chunks/embeddings stored here
 └─────────────────────┘
 ```
 
@@ -79,7 +80,8 @@ volumes:
 **Important notes:**
 - Replace `/path/to/your/documents` with the actual path to your local folder
 - The `:ro` suffix mounts the folder as read-only, preventing accidental modifications to your original files
-- Files will be **copied from** this mount into RAGFlow's storage during indexing
+- **Files remain in this location** - RAGFlow references them directly without copying
+- **Do not unmount or move files** after indexing - RAGFlow needs access to parse and retrieve them
 - The container path must be under `/ragflow/mounted_data` (or your configured `MOUNTED_FOLDERS_PATH`)
 
 ### Step 2: Configure allowed base path (optional)
@@ -214,46 +216,73 @@ volumes:
 
 **Solution**: Check the error messages returned after indexing. Files with unsupported types will be skipped with specific error messages.
 
-### Running out of storage space
+### Error: "Local file not found" during parsing
 
-**Cause**: Files are copied to RAGFlow's storage backend (MinIO/S3/etc.), which may have limited space.
+**Cause**: The mounted folder was unmounted or files were moved after indexing.
 
-**Solution**: 
-1. Check your storage backend capacity (MinIO volumes, S3 bucket limits)
-2. Clean up old or unused documents from datasets
-3. Increase storage allocation for your storage backend
-4. Note: Files from mounted folders are duplicated into RAGFlow's storage
+**Solution**:
+1. Ensure the mounted folder remains accessible at the same path
+2. Files must stay in their original location for RAGFlow to access them
+3. If you moved files, re-index from the new location
 
 ## FAQ
 
-**Q: Where are the files stored when I use read-only mounts?**
+**Q: Where are the files stored when I use local folder indexing?**
 
-A: Files are stored in RAGFlow's internal storage system (MinIO, S3, or your configured storage backend), **not** in the mounted folder. The workflow is:
-1. Files are **read from** your mounted folder (which can be read-only)
-2. Files are **copied into** RAGFlow's storage system
-3. Files are **processed from** RAGFlow's storage
+A: **Files remain in your mounted folder** - they are NOT copied to RAGFlow's storage. The zero-copy architecture works as follows:
+1. Files **stay in** your mounted folder (e.g., `/ragflow/mounted_data/documents/`)
+2. RAGFlow **stores references** to file locations (e.g., `file:///ragflow/mounted_data/documents/report.pdf`)
+3. Only **parsed chunks and embeddings** are stored in RAGFlow's database
 
-Your original files on the mounted folder remain completely untouched. This is why read-only (`:ro`) mounts are safe and recommended.
+This saves disk space by avoiding file duplication. However, it means the mounted folder must remain accessible.
 
-**Q: Will the files be duplicated in RAGFlow's storage?**
+**Q: Can I unmount the folder after indexing?**
 
-A: Yes, the files are read from the mounted folder and stored in RAGFlow's storage system. This ensures they are available for parsing and retrieval. The benefit is that you can organize and prepare your files on your filesystem first, then index them without manually uploading each file through the web interface. The read-only mount option also provides an additional safety layer to prevent accidental modifications to your original files.
+A: **No!** Unlike regular file uploads, local folder indexing keeps files in place. If you unmount or move the folder, RAGFlow will not be able to access the documents for:
+- Re-parsing with different settings
+- Generating previews
+- Chat responses with file context
+
+The mounted folder must remain accessible for the lifetime of the indexed documents.
+
+**Q: What happens if I delete files from the mounted folder?**
+
+A: The parsed chunks will remain in RAGFlow's database and searches will still work. However:
+- You won't be able to re-parse the document
+- File previews will not work
+- Some features requiring the original file will fail
+
+It's recommended to delete documents from RAGFlow's UI first, which will clean up both the reference and the parsed data.
+
+**Q: How much storage space does this save?**
+
+A: Significant savings! For example:
+- **Regular upload**: 10GB of PDFs → 10GB in MinIO + ~500MB index = 10.5GB total
+- **Local folder indexing**: 10GB of PDFs in mounted folder + ~500MB index = 500MB RAGFlow storage
+
+You only use storage for the parsed index, not the raw files.
 
 **Q: Can I index the same folder multiple times?**
 
-A: Yes, but this will create duplicate documents in your dataset. RAGFlow will detect duplicates by filename and add a suffix to avoid conflicts.
+A: Yes, but each indexing creates new document references. Since files stay in place, you won't duplicate the actual file data, only the document metadata and index entries.
 
 **Q: Can I index folders on network drives?**
 
-A: Yes, as long as the network drive is mounted on your host machine and you mount it into the Docker container.
+A: Yes! This is actually ideal for zero-copy indexing. Mount NFS/CIFS shares into the container, and RAGFlow will reference files directly without copying them. Just ensure the network share remains accessible.
 
-**Q: Is there a size limit for the folder?**
+**Q: What if I need to reorganize my files?**
 
-A: There is no specific folder size limit, but indexing very large folders may take time. The system processes files sequentially to avoid overwhelming the system.
+A: If you move files after indexing, the references will break. Options:
+1. Delete old documents from RAGFlow and re-index from the new location
+2. Keep files in their original location and use symbolic links
+3. Use RAGFlow's UI to delete and re-add documents
 
-**Q: Can I update files in the mounted folder after indexing?**
+**Q: Does this work with cloud storage (S3, Google Drive)?**
 
-A: Changes to files in the mounted folder will NOT automatically update the indexed documents. You would need to re-index the folder or manually update specific documents.
+A: Not directly. This feature is for local file systems and network mounts (NFS/CIFS). For cloud storage, consider:
+1. Using RAGFlow's data connector features
+2. Mounting cloud storage as a local file system (e.g., s3fs, rclone mount)
+3. Using RAGFlow's regular upload API
 
 ## See also
 

@@ -589,39 +589,33 @@ class FileService(CommonService):
                     err.append(f"{file_path}: File too large (max {max_size // (1024*1024)}MB)")
                     continue
                 
-                # Read file from local path (mounted folder can be read-only)
-                # Files are read here but will be stored in RAGFlow's storage system
-                with open(file_path, "rb") as f:
-                    blob = f.read()
-                
-                if filetype == FileType.PDF.value:
-                    blob = read_potential_broken_pdf(blob)
-                
-                # Create storage location (store in RAGFlow storage system)
-                # Original files in mounted folder remain untouched
-                # Use parent_dirs if file is in subdirectory
-                location = filename if not parent_dirs else f"{parent_dirs}/{filename}"
-                
-                # Ensure unique location in storage
-                while settings.STORAGE_IMPL.obj_exist(kb.id, location):
-                    location += "_"
-                
-                # Store the blob in RAGFlow's internal storage system (MinIO/S3/etc.)
-                # This is why read-only mounts are safe - we only READ from mounted folder
-                settings.STORAGE_IMPL.put(kb.id, location, blob)
+                # For local folder indexing, we store the file path reference instead of copying
+                # This implements zero-copy indexing - files stay in mounted location
+                # Location format: file:///absolute/path/to/file.pdf
+                location = f"file://{file_path}"
                 
                 # Generate document ID
                 doc_id = get_uuid()
                 
-                # Create thumbnail if applicable
-                img = thumbnail_img(filename, blob)
+                # Read file only for thumbnail generation and validation
+                try:
+                    with open(file_path, "rb") as f:
+                        # Read first part for thumbnail (avoid loading entire file)
+                        blob_sample = f.read(10 * 1024 * 1024)  # Read first 10MB for thumbnail
+                except Exception as e:
+                    err.append(f"{file_path}: Cannot read file - {str(e)}")
+                    continue
+                
+                # Create thumbnail if applicable (from sample)
+                img = thumbnail_img(filename, blob_sample)
                 thumbnail_location = ""
                 if img is not None:
                     thumbnail_location = f"thumbnail_{doc_id}.png"
+                    # Store thumbnail in RAGFlow storage (small file, OK to store)
                     settings.STORAGE_IMPL.put(kb.id, thumbnail_location, img)
                 
-                # Create document record
-                # source_type is set to "local_folder" to indicate origin
+                # Create document record with file:// reference
+                # Files remain in mounted folder, only index is stored in RAGFlow
                 doc = {
                     "id": doc_id,
                     "kb_id": kb.id,
@@ -633,14 +627,15 @@ class FileService(CommonService):
                     "name": filename,
                     "source_type": "local_folder",
                     "suffix": Path(filename).suffix.lstrip("."),
-                    "location": location,
-                    "size": len(blob),
+                    "location": location,  # file:// path, not storage path
+                    "size": file_size,
                     "thumbnail": thumbnail_location,
                 }
                 DocumentService.insert(doc)
                 
                 cls.add_file_from_kb(doc, kb_folder["id"], kb.tenant_id)
-                files.append((doc, blob))
+                # Note: We pass None as blob since we're not copying the file
+                files.append((doc, None))
                 
             except Exception as e:
                 err.append(f"{file_path}: {str(e)}")

@@ -308,7 +308,7 @@ Beispiel: Eine 1 KB Nachricht mit 1024-dim Einbettung verwendet ~9 KB. Das Stand
       localFolderPathDescription:
         'Geben Sie den Pfad zum im Docker-Container gemounteten Ordner ein (muss innerhalb von /ragflow/mounted_data sein)',
       localFolderStorageInfo:
-        'Dateien werden aus diesem Ordner gelesen und für die Verarbeitung in das Speichersystem von RAGFlow kopiert. Der gemountete Ordner kann schreibgeschützt sein.',
+        'Dateien verbleiben im gemounteten Ordner und werden direkt referenziert. Nur geparste Inhalte (Chunks/Embeddings) werden in RAGFlow gespeichert. Ordner nach der Indizierung nicht aushängen.',
       recursiveScan: 'Unterverzeichnisse scannen',
       recursiveScanDescription:
         'Rekursiv alle Unterverzeichnisse nach Dateien durchsuchen',
