@@ -21,6 +21,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 import { IIndexLocalFolderFormData } from './use-index-local-folder';
 
 const formSchema = z.object({
@@ -75,6 +77,13 @@ export function IndexLocalFolderDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                {t('knowledgeDetails.localFolderStorageInfo')}
+              </AlertDescription>
+            </Alert>
+            
             <FormField
               control={form.control}
               name="localPath"

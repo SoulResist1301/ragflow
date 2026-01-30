@@ -589,14 +589,16 @@ class FileService(CommonService):
                     err.append(f"{file_path}: File too large (max {max_size // (1024*1024)}MB)")
                     continue
                 
-                # Read file from local path
+                # Read file from local path (mounted folder can be read-only)
+                # Files are read here but will be stored in RAGFlow's storage system
                 with open(file_path, "rb") as f:
                     blob = f.read()
                 
                 if filetype == FileType.PDF.value:
                     blob = read_potential_broken_pdf(blob)
                 
-                # Create storage location (store in RAGFlow storage but mark source)
+                # Create storage location (store in RAGFlow storage system)
+                # Original files in mounted folder remain untouched
                 # Use parent_dirs if file is in subdirectory
                 location = filename if not parent_dirs else f"{parent_dirs}/{filename}"
                 
@@ -604,7 +606,8 @@ class FileService(CommonService):
                 while settings.STORAGE_IMPL.obj_exist(kb.id, location):
                     location += "_"
                 
-                # Store the blob in RAGFlow storage
+                # Store the blob in RAGFlow's internal storage system (MinIO/S3/etc.)
+                # This is why read-only mounts are safe - we only READ from mounted folder
                 settings.STORAGE_IMPL.put(kb.id, location, blob)
                 
                 # Generate document ID

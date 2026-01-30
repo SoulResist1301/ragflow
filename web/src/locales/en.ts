@@ -299,6 +299,8 @@ Example: A 1 KB message with 1024-dim embedding uses ~9 KB. The 5 MB default lim
       localFolderPathRequired: 'Local folder path is required.',
       localFolderPathDescription:
         'Enter the path to the folder mounted in the Docker container (must be within /ragflow/mounted_data)',
+      localFolderStorageInfo:
+        'Files will be read from this folder and copied to RAGFlow\'s storage system for processing. The mounted folder can be read-only.',
       recursiveScan: 'Scan subdirectories',
       recursiveScanDescription:
         'Recursively scan all subdirectories for files',

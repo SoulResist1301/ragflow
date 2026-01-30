@@ -17,7 +17,39 @@ When you have documents stored on your host machine that are already accessible 
 - Use read-only mounts for added safety
 - Automatically process and store files in RAGFlow's storage system
 
-**Note**: Files are read from the mounted folder and stored in RAGFlow's storage system for processing. This provides the benefit of simplified indexing while maintaining RAGFlow's document management capabilities.
+### How File Storage Works
+
+**Important**: This feature uses a read-copy-process workflow:
+
+1. **Read**: Files are read from your mounted folder (which can be read-only)
+2. **Copy**: Files are copied into RAGFlow's internal storage system (MinIO, S3, or configured storage backend)
+3. **Process**: Files are then parsed and indexed from RAGFlow's storage
+
+**The read-only mount is only used as a source.** Your original files remain completely untouched on the mounted volume. This means:
+
+- ✅ You can safely use read-only (`:ro`) mounts
+- ✅ Original files are never modified
+- ✅ You can unmount the folder after indexing if desired
+- ⚠️ Files are duplicated into RAGFlow's storage (ensure adequate storage space)
+
+```
+┌─────────────────────┐
+│  Host Machine       │
+│  /your/documents/   │  ← Original files (read-only is safe)
+└──────────┬──────────┘
+           │ Docker volume mount (:ro)
+           ↓
+┌─────────────────────┐
+│  RAGFlow Container  │
+│  /ragflow/mounted   │  ← Read files from here
+└──────────┬──────────┘
+           │ Copy files
+           ↓
+┌─────────────────────┐
+│  RAGFlow Storage    │
+│  (MinIO/S3/etc.)    │  ← Files stored here for processing
+└─────────────────────┘
+```
 
 ## Prerequisites
 
@@ -46,7 +78,8 @@ volumes:
 
 **Important notes:**
 - Replace `/path/to/your/documents` with the actual path to your local folder
-- The `:ro` suffix mounts the folder as read-only, preventing accidental modifications
+- The `:ro` suffix mounts the folder as read-only, preventing accidental modifications to your original files
+- Files will be **copied from** this mount into RAGFlow's storage during indexing
 - The container path must be under `/ragflow/mounted_data` (or your configured `MOUNTED_FOLDERS_PATH`)
 
 ### Step 2: Configure allowed base path (optional)
@@ -181,7 +214,26 @@ volumes:
 
 **Solution**: Check the error messages returned after indexing. Files with unsupported types will be skipped with specific error messages.
 
+### Running out of storage space
+
+**Cause**: Files are copied to RAGFlow's storage backend (MinIO/S3/etc.), which may have limited space.
+
+**Solution**: 
+1. Check your storage backend capacity (MinIO volumes, S3 bucket limits)
+2. Clean up old or unused documents from datasets
+3. Increase storage allocation for your storage backend
+4. Note: Files from mounted folders are duplicated into RAGFlow's storage
+
 ## FAQ
+
+**Q: Where are the files stored when I use read-only mounts?**
+
+A: Files are stored in RAGFlow's internal storage system (MinIO, S3, or your configured storage backend), **not** in the mounted folder. The workflow is:
+1. Files are **read from** your mounted folder (which can be read-only)
+2. Files are **copied into** RAGFlow's storage system
+3. Files are **processed from** RAGFlow's storage
+
+Your original files on the mounted folder remain completely untouched. This is why read-only (`:ro`) mounts are safe and recommended.
 
 **Q: Will the files be duplicated in RAGFlow's storage?**
 
