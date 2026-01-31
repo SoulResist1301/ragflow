@@ -27,6 +27,7 @@ Cargo.lock
 
 # Exclude the log folder
 docker/ragflow-logs/
+docker/uv-cache/
 /flask_session
 /logs
 rag/res/deepdoc
