@@ -211,3 +211,7 @@ backup
 # Added by cargo
 
 /target
+.gitnexus
+/.claude
+AGENTS.md
+CLAUDE.md
